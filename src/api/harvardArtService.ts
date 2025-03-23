@@ -13,17 +13,31 @@ const API_KEY = 'ca46d3f1-9f99-499c-b12d-e5f57052da61';  // process.env.REACT_AP
 
 /**
  * Fetches a list of artworks from the Harvard Art Museums API
- * @param query Search query string
- * @param page Page number (1-based)
- * @param pageSize Number of results per page
+ * @param params Search parameters object
  * @returns Promise with transformed Artwork objects
  */
 export const fetchArtworksList = async (
-  query: string = '',
-  page: number = 1,
-  pageSize: number = 100
+  params: {
+    query?: string;
+    artist?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    medium?: string;
+    page?: number;
+    pageSize?: number;
+  }
 ): Promise<Artwork[]> => {
   try {
+    const { 
+      query = '', 
+      artist = '',
+      dateFrom = '',
+      dateTo = '',
+      medium = '',
+      page = 1, 
+      pageSize = 100 
+    } = params;
+    
     const url = new URL(`${BASE_URL}/object`);
     
     // Add query parameters
@@ -32,9 +46,41 @@ export const fetchArtworksList = async (
     url.searchParams.append('size', pageSize.toString());
     url.searchParams.append('hasimage', '1'); // Only return results with images
     
-    // Add search query if provided
+    // Build advanced query using field-specific search
+    let advancedQuery = '';
+    
+    // Add keyword search if provided
     if (query) {
-      url.searchParams.append('keyword', query);
+      advancedQuery += query;
+    }
+    
+    // Add artist filter using person field
+    if (artist) {
+      if (advancedQuery) advancedQuery += ' AND ';
+      advancedQuery += `person:"${artist}"`;
+    }
+    
+    // Add medium filter
+    if (medium) {
+      if (advancedQuery) advancedQuery += ' AND ';
+      advancedQuery += `medium:"${medium}"`;
+    }
+    
+    // Add date range filtering if both dates are provided
+    if (dateFrom && dateTo) {
+      if (advancedQuery) advancedQuery += ' AND ';
+      advancedQuery += `dated:[${dateFrom} TO ${dateTo}]`;
+    } else if (dateFrom) {
+      if (advancedQuery) advancedQuery += ' AND ';
+      advancedQuery += `dated:>=${dateFrom}`;
+    } else if (dateTo) {
+      if (advancedQuery) advancedQuery += ' AND ';
+      advancedQuery += `dated:<=${dateTo}`;
+    }
+    
+    // Add the combined query if we have any filters
+    if (advancedQuery) {
+      url.searchParams.append('q', advancedQuery);
     }
     
     const response = await fetch(url.toString());

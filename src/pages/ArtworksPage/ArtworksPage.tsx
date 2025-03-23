@@ -23,9 +23,15 @@ import {
   MenuItem,
   SelectChangeEvent,
   Paper,
-  InputAdornment
+  InputAdornment,
+  Collapse,
+  IconButton,
+  Divider
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
+import FilterListIcon from '@mui/icons-material/FilterList';
+import ClearAllIcon from '@mui/icons-material/ClearAll';
+import CloseIcon from '@mui/icons-material/Close';
 import { 
   fetchArtworks, 
   selectAllArtworks, 
@@ -36,7 +42,8 @@ import {
   selectPaginatedArtworks,
   selectShouldFetchForCurrentPage,
   setFilter,
-  setPage
+  setPage,
+  resetFilters
 } from '../../store/artworkSlice';
 import { AppDispatch } from '../../store';
 import { Artwork } from '../../types/Artwork';
@@ -55,6 +62,11 @@ const ArtworksPage: React.FC = () => {
   const shouldFetch = useSelector(selectShouldFetchForCurrentPage);
   
   const [searchQuery, setSearchQuery] = useState(filters.query);
+  const [artist, setArtist] = useState(filters.artist);
+  const [dateFrom, setDateFrom] = useState(filters.dateFrom);
+  const [dateTo, setDateTo] = useState(filters.dateTo);
+  const [medium, setMedium] = useState(filters.medium);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   
   useEffect(() => {
@@ -62,6 +74,10 @@ const ArtworksPage: React.FC = () => {
     if (shouldFetch) {
       dispatch(fetchArtworks({
         query: filters.query,
+        artist: filters.artist,
+        dateFrom: filters.dateFrom,
+        dateTo: filters.dateTo,
+        medium: filters.medium,
         page: currentPage,
         source: filters.source
       })).then(() => {
@@ -72,11 +88,17 @@ const ArtworksPage: React.FC = () => {
     } else {
       setIsInitialLoad(false);
     }
-  }, [dispatch, filters.query, currentPage, filters.source, shouldFetch, isInitialLoad]);
+  }, [dispatch, filters, currentPage, shouldFetch, isInitialLoad]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    dispatch(setFilter({ query: searchQuery }));
+    dispatch(setFilter({ 
+      query: searchQuery,
+      artist,
+      dateFrom,
+      dateTo,
+      medium
+    }));
   };
   
   const handleSourceChange = (e: SelectChangeEvent) => {
@@ -85,9 +107,28 @@ const ArtworksPage: React.FC = () => {
     }));
   };
   
+  const handleClearFilters = () => {
+    setSearchQuery('');
+    setArtist('');
+    setDateFrom('');
+    setDateTo('');
+    setMedium('');
+    dispatch(resetFilters());
+  };
+  
   const handlePageChange = (event: React.ChangeEvent<unknown>, value: number) => {
     dispatch(setPage(value));
   };
+  
+  // Create an array of active filters to display as chips
+  const activeFilters = [
+    ...(filters.query ? [{ label: `Keyword: ${filters.query}`, value: 'query' }] : []),
+    ...(filters.artist ? [{ label: `Artist: ${filters.artist}`, value: 'artist' }] : []),
+    ...(filters.dateFrom ? [{ label: `From: ${filters.dateFrom}`, value: 'dateFrom' }] : []),
+    ...(filters.dateTo ? [{ label: `To: ${filters.dateTo}`, value: 'dateTo' }] : []),
+    ...(filters.medium ? [{ label: `Medium: ${filters.medium}`, value: 'medium' }] : []),
+    ...(filters.source !== 'all' ? [{ label: `Source: ${filters.source === 'rijksmuseum' ? 'Rijksmuseum' : 'Harvard Art Museums'}`, value: 'source' }] : [])
+  ];
 
   // Show an error message if the loader reported an error
   if (loaderData && !loaderData.success) {
@@ -140,9 +181,9 @@ const ArtworksPage: React.FC = () => {
         
         {/* Search and Filter Section */}
         <Paper sx={{ p: 3, mb: 4 }}>
-          <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} md={6}>
-              <form onSubmit={handleSearch}>
+          <form onSubmit={handleSearch}>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
                 <TextField
                   fullWidth
                   variant="outlined"
@@ -155,38 +196,139 @@ const ArtworksPage: React.FC = () => {
                         <SearchIcon />
                       </InputAdornment>
                     ),
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <Button 
-                          variant="contained" 
-                          color="primary" 
-                          type="submit"
-                          disabled={status === 'loading'}
-                        >
-                          Search
-                        </Button>
-                      </InputAdornment>
-                    ),
                   }}
                 />
-              </form>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Box display="flex" gap={2}>
+                  <FormControl fullWidth>
+                    <InputLabel id="source-select-label">Source</InputLabel>
+                    <Select
+                      labelId="source-select-label"
+                      value={filters.source}
+                      label="Source"
+                      onChange={handleSourceChange}
+                    >
+                      <MenuItem value="all">All Sources</MenuItem>
+                      <MenuItem value="rijksmuseum">Rijksmuseum</MenuItem>
+                      <MenuItem value="harvardartmuseums">Harvard Art Museums</MenuItem>
+                    </Select>
+                  </FormControl>
+                  <Button
+                    color="primary"
+                    startIcon={<FilterListIcon />}
+                    onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                    variant={showAdvancedFilters ? "contained" : "outlined"}
+                  >
+                    Filters
+                  </Button>
+                </Box>
+              </Grid>
+              
+              {/* Advanced Filters */}
+              <Grid item xs={12}>
+                <Collapse in={showAdvancedFilters}>
+                  <Box sx={{ mt: 2 }}>
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} md={6}>
+                        <TextField
+                          fullWidth
+                          label="Artist"
+                          variant="outlined"
+                          placeholder="e.g. Van Gogh, Rembrandt"
+                          value={artist}
+                          onChange={(e) => setArtist(e.target.value)}
+                        />
+                      </Grid>
+                      <Grid item xs={12} md={6}>
+                        <TextField
+                          fullWidth
+                          label="Medium"
+                          variant="outlined"
+                          placeholder="e.g. oil, canvas, wood"
+                          value={medium}
+                          onChange={(e) => setMedium(e.target.value)}
+                        />
+                      </Grid>
+                      <Grid item xs={12} md={6}>
+                        <TextField
+                          fullWidth
+                          label="Date From"
+                          variant="outlined"
+                          placeholder="e.g. 1600"
+                          value={dateFrom}
+                          onChange={(e) => setDateFrom(e.target.value)}
+                          type="number"
+                          inputProps={{ min: "0", max: new Date().getFullYear() }}
+                        />
+                      </Grid>
+                      <Grid item xs={12} md={6}>
+                        <TextField
+                          fullWidth
+                          label="Date To"
+                          variant="outlined"
+                          placeholder="e.g. 1700"
+                          value={dateTo}
+                          onChange={(e) => setDateTo(e.target.value)}
+                          type="number"
+                          inputProps={{ min: "0", max: new Date().getFullYear() }}
+                        />
+                      </Grid>
+                    </Grid>
+                  </Box>
+                </Collapse>
+              </Grid>
+              
+              <Grid item xs={12}>
+                <Box display="flex" justifyContent="space-between" alignItems="center">
+                  <Button 
+                    variant="contained" 
+                    color="primary" 
+                    type="submit"
+                    disabled={status === 'loading'}
+                    sx={{ mt: 2 }}
+                  >
+                    Search
+                  </Button>
+                  
+                  {activeFilters.length > 0 && (
+                    <Button
+                      startIcon={<ClearAllIcon />}
+                      onClick={handleClearFilters}
+                      sx={{ mt: 2 }}
+                    >
+                      Clear Filters
+                    </Button>
+                  )}
+                </Box>
+              </Grid>
+              
+              {/* Active Filters */}
+              {activeFilters.length > 0 && (
+                <Grid item xs={12}>
+                  <Box sx={{ mt: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                    {activeFilters.map((filter) => (
+                      <Chip
+                        key={filter.value}
+                        label={filter.label}
+                        onDelete={() => {
+                          if (filter.value === 'query') setSearchQuery('');
+                          if (filter.value === 'artist') setArtist('');
+                          if (filter.value === 'dateFrom') setDateFrom('');
+                          if (filter.value === 'dateTo') setDateTo('');
+                          if (filter.value === 'medium') setMedium('');
+                          
+                          dispatch(setFilter({ [filter.value]: filter.value === 'source' ? 'all' : '' }));
+                        }}
+                        color="primary"
+                        variant="outlined"
+                      />
+                    ))}
+                  </Box>
+                </Grid>
+              )}
             </Grid>
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth>
-                <InputLabel id="source-select-label">Source</InputLabel>
-                <Select
-                  labelId="source-select-label"
-                  value={filters.source}
-                  label="Source"
-                  onChange={handleSourceChange}
-                >
-                  <MenuItem value="all">All Sources</MenuItem>
-                  <MenuItem value="rijksmuseum">Rijksmuseum</MenuItem>
-                  <MenuItem value="harvardartmuseums">Harvard Art Museums</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-          </Grid>
+          </form>
         </Paper>
 
         {/* Loading and Error States */}
@@ -205,6 +347,10 @@ const ArtworksPage: React.FC = () => {
               sx={{ ml: 2 }}
               onClick={() => dispatch(fetchArtworks({
                 query: filters.query,
+                artist: filters.artist,
+                dateFrom: filters.dateFrom,
+                dateTo: filters.dateTo,
+                medium: filters.medium,
                 page: currentPage,
                 source: filters.source,
                 forceRefresh: true
@@ -256,10 +402,19 @@ const ArtworksPage: React.FC = () => {
                       <Typography gutterBottom variant="h6" component="h2" noWrap>
                         {artwork.title || 'Untitled'}
                       </Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                         {artwork.artist || 'Unknown artist'}
-                        {artwork.year && `, ${artwork.year}`}
                       </Typography>
+                      {artwork.year && (
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                          {artwork.year}
+                        </Typography>
+                      )}
+                      {artwork.medium && (
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }} noWrap>
+                          {artwork.medium}
+                        </Typography>
+                      )}
                       <Chip 
                         label={artwork.source === 'rijksmuseum' ? 'Rijksmuseum' : 'Harvard Art'}
                         size="small" 

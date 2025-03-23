@@ -35,6 +35,10 @@ interface ArtworkState {
   };
   filters: {
     query: string;
+    artist: string;
+    dateFrom: string;
+    dateTo: string;
+    medium: string;
     source: 'all' | 'rijksmuseum' | 'harvardartmuseums';
   };
   // Track which queries/pages we've already fetched
@@ -59,13 +63,24 @@ const initialState: ArtworkState = {
   },
   filters: {
     query: '',
+    artist: '',
+    dateFrom: '',
+    dateTo: '',
+    medium: '',
     source: 'all',
   },
   fetchedData: {},
 };
 
 // Helper to create a cache key for tracking fetched data
-const getCacheKey = (query: string, source: string) => `${query}:${source}`;
+const getCacheKey = (
+  query: string, 
+  artist: string = '',
+  dateFrom: string = '',
+  dateTo: string = '',
+  medium: string = '',
+  source: string
+) => `${query}:${artist}:${dateFrom}:${dateTo}:${medium}:${source}`;
 
 // Helper to convert display page to fetch page
 // For example, display pages 1-5 (showing 20 items each) would be fetch page 1 (fetching 100 items)
@@ -79,11 +94,19 @@ export const fetchArtworks = createAsyncThunk(
   async (
     {
       query = '',
+      artist = '',
+      dateFrom = '',
+      dateTo = '',
+      medium = '',
       page = 1, // This is the display page
       source = 'all',
       forceRefresh = false,
     }: {
       query?: string;
+      artist?: string;
+      dateFrom?: string;
+      dateTo?: string;
+      medium?: string;
       page?: number;
       source?: 'all' | 'rijksmuseum' | 'harvardartmuseums';
       forceRefresh?: boolean;
@@ -92,7 +115,7 @@ export const fetchArtworks = createAsyncThunk(
   ) => {
     try {
       const state = getState() as RootState;
-      const cacheKey = getCacheKey(query, source);
+      const cacheKey = getCacheKey(query, artist, dateFrom, dateTo, medium, source);
       const fetchedData = state.artworks.fetchedData;
       
       // Calculate which fetch page we need
@@ -117,6 +140,10 @@ export const fetchArtworks = createAsyncThunk(
           },
           filters: {
             query,
+            artist,
+            dateFrom,
+            dateTo,
+            medium,
             source,
           },
         };
@@ -129,7 +156,15 @@ export const fetchArtworks = createAsyncThunk(
       
       // Fetch from Rijksmuseum if source is 'all' or 'rijksmuseum'
       if (source === 'all' || source === 'rijksmuseum') {
-        const rijksResponse = await rijksMuseumService.fetchArtworksList(query, fetchPage, FETCH_BATCH_SIZE);
+        const rijksResponse = await rijksMuseumService.fetchArtworksList({
+          query,
+          artist,
+          dateFrom,
+          dateTo,
+          medium,
+          page: fetchPage,
+          pageSize: FETCH_BATCH_SIZE
+        });
         artworks = [...artworks, ...rijksResponse];
         
         // Use the response length as an approximation for the total count
@@ -139,7 +174,15 @@ export const fetchArtworks = createAsyncThunk(
       
       // Fetch from Harvard if source is 'all' or 'harvardartmuseums'
       if (source === 'all' || source === 'harvardartmuseums') {
-        const harvardResponse = await harvardArtService.fetchArtworksList(query, fetchPage, FETCH_BATCH_SIZE);
+        const harvardResponse = await harvardArtService.fetchArtworksList({
+          query,
+          artist,
+          dateFrom,
+          dateTo,
+          medium,
+          page: fetchPage,
+          pageSize: FETCH_BATCH_SIZE
+        });
         artworks = [...artworks, ...harvardResponse];
         
         // Use the response length as an approximation for the total count
@@ -165,6 +208,10 @@ export const fetchArtworks = createAsyncThunk(
         },
         filters: {
           query,
+          artist,
+          dateFrom,
+          dateTo,
+          medium,
           source,
         },
         cacheKey,
@@ -228,9 +275,28 @@ const artworkSlice = createSlice({
   initialState,
   reducers: {
     // Additional reducers for other actions (like setting filters, clearing, etc.)
-    setFilter: (state, action: PayloadAction<{ query?: string; source?: 'all' | 'rijksmuseum' | 'harvardartmuseums' }>) => {
+    setFilter: (state, action: PayloadAction<{ 
+      query?: string; 
+      artist?: string;
+      dateFrom?: string;
+      dateTo?: string;
+      medium?: string;
+      source?: 'all' | 'rijksmuseum' | 'harvardartmuseums' 
+    }>) => {
       if (action.payload.query !== undefined) {
         state.filters.query = action.payload.query;
+      }
+      if (action.payload.artist !== undefined) {
+        state.filters.artist = action.payload.artist;
+      }
+      if (action.payload.dateFrom !== undefined) {
+        state.filters.dateFrom = action.payload.dateFrom;
+      }
+      if (action.payload.dateTo !== undefined) {
+        state.filters.dateTo = action.payload.dateTo;
+      }
+      if (action.payload.medium !== undefined) {
+        state.filters.medium = action.payload.medium;
       }
       if (action.payload.source !== undefined) {
         state.filters.source = action.payload.source;
@@ -342,9 +408,13 @@ export const selectPaginatedArtworks = createSelector(
   [(state: RootState) => state.artworks.items, 
    (state: RootState) => state.artworks.filters.source,
    (state: RootState) => state.artworks.filters.query,
+   (state: RootState) => state.artworks.filters.artist,
+   (state: RootState) => state.artworks.filters.dateFrom,
+   (state: RootState) => state.artworks.filters.dateTo,
+   (state: RootState) => state.artworks.filters.medium,
    (state: RootState) => state.artworks.pagination.currentPage,
    (state: RootState) => state.artworks.pagination.pageSize],
-  (items, source, query, currentPage, pageSize) => {
+  (items, source, query, artist, dateFrom, dateTo, medium, currentPage, pageSize) => {
     // Filter by source and query
     let filteredItems = items;
     
@@ -358,6 +428,37 @@ export const selectPaginatedArtworks = createSelector(
         (item.title?.toLowerCase() || '').includes(lowerQuery) || 
         (item.artist?.toLowerCase() || '').includes(lowerQuery)
       );
+    }
+    
+    // Filter by artist
+    if (artist) {
+      const lowerArtist = artist.toLowerCase();
+      filteredItems = filteredItems.filter(item => 
+        (item.artist?.toLowerCase() || '').includes(lowerArtist)
+      );
+    }
+    
+    // Filter by medium
+    if (medium) {
+      const lowerMedium = medium.toLowerCase();
+      filteredItems = filteredItems.filter(item => 
+        (item.medium?.toLowerCase() || '').includes(lowerMedium)
+      );
+    }
+    
+    // Filter by date range
+    if (dateFrom || dateTo) {
+      filteredItems = filteredItems.filter(item => {
+        // Skip items without year data
+        if (!item.year) return false;
+        
+        // Check if year is within range
+        const year = item.year;
+        const fromYear = dateFrom ? parseInt(dateFrom, 10) : -Infinity;
+        const toYear = dateTo ? parseInt(dateTo, 10) : Infinity;
+        
+        return year >= fromYear && year <= toYear;
+      });
     }
     
     // Calculate pagination
@@ -374,9 +475,13 @@ export const selectShouldFetchForCurrentPage = createSelector(
   [(state: RootState) => state.artworks.pagination.currentPage,
    (state: RootState) => state.artworks.filters.source,
    (state: RootState) => state.artworks.filters.query,
+   (state: RootState) => state.artworks.filters.artist,
+   (state: RootState) => state.artworks.filters.dateFrom,
+   (state: RootState) => state.artworks.filters.dateTo,
+   (state: RootState) => state.artworks.filters.medium,
    (state: RootState) => state.artworks.fetchedData],
-  (currentPage, source, query, fetchedData) => {
-    const cacheKey = getCacheKey(query, source);
+  (currentPage, source, query, artist, dateFrom, dateTo, medium, fetchedData) => {
+    const cacheKey = getCacheKey(query, artist, dateFrom, dateTo, medium, source);
     const fetchPage = displayPageToFetchPage(currentPage);
     
     // Check if we've already fetched data for this page

@@ -1,7 +1,10 @@
 import React from 'react';
-import { Container, Typography, Paper, Box, Button, Grid } from '@mui/material';
+import { Container, Typography, Paper, Box, Button } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
 
 const HomePage: React.FC = () => {
+  const navigate = useNavigate();
+
   return (
     <Container maxWidth="xl">
       <Box sx={{ mt: 4, mb: 8 }}>
@@ -37,52 +40,24 @@ const HomePage: React.FC = () => {
           </Typography>
           
           <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
-            <Button variant="contained" color="primary" size="large">
+            <Button 
+              variant="contained" 
+              color="primary" 
+              size="large"
+              onClick={() => navigate('/artworks')}
+            >
               Browse Collections
             </Button>
-            <Button variant="outlined" color="primary" size="large">
-              Featured Artists
+            <Button 
+              variant="outlined" 
+              color="primary" 
+              size="large"
+              onClick={() => navigate('/exhibitions')}
+            >
+              My Exhibitions
             </Button>
           </Box>
         </Paper>
-        
-        <Grid container spacing={4} sx={{ mt: 6 }}>
-          <Grid item xs={12} md={4}>
-            <Paper sx={{ p: 3, height: '100%' }}>
-              <Typography variant="h5" component="h2" gutterBottom>
-                Latest Exhibitions
-              </Typography>
-              <Typography variant="body1" paragraph>
-                Discover our newest curated exhibitions featuring contemporary artists and classical masterpieces.
-              </Typography>
-              <Button variant="text" color="primary">Learn more</Button>
-            </Paper>
-          </Grid>
-          
-          <Grid item xs={12} md={4}>
-            <Paper sx={{ p: 3, height: '100%' }}>
-              <Typography variant="h5" component="h2" gutterBottom>
-                Popular Collections
-              </Typography>
-              <Typography variant="body1" paragraph>
-                Browse through our most popular art collections and discover why they've captured attention worldwide.
-              </Typography>
-              <Button variant="text" color="primary">View collections</Button>
-            </Paper>
-          </Grid>
-          
-          <Grid item xs={12} md={4}>
-            <Paper sx={{ p: 3, height: '100%' }}>
-              <Typography variant="h5" component="h2" gutterBottom>
-                Artists Spotlight
-              </Typography>
-              <Typography variant="body1" paragraph>
-                Learn about featured artists, their inspirations, techniques, and contributions to the art world.
-              </Typography>
-              <Button variant="text" color="primary">Meet the artists</Button>
-            </Paper>
-          </Grid>
-        </Grid>
       </Box>
     </Container>
   );

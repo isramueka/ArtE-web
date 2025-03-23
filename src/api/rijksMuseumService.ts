@@ -13,17 +13,31 @@ const API_KEY = 'FBE3ku6i';  // process.env.REACT_APP_RIJKSMUSEUM_API_KEY
 
 /**
  * Fetches a list of artworks from the Rijksmuseum API
- * @param query Search query string
- * @param page Page number (1-based)
- * @param pageSize Number of results per page
+ * @param params Search parameters object
  * @returns Promise with transformed Artwork objects
  */
 export const fetchArtworksList = async (
-  query: string = '',
-  page: number = 1,
-  pageSize: number = 100
+  params: {
+    query?: string;
+    artist?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    medium?: string;
+    page?: number;
+    pageSize?: number;
+  }
 ): Promise<Artwork[]> => {
   try {
+    const { 
+      query = '', 
+      artist = '',
+      dateFrom = '',
+      dateTo = '',
+      medium = '',
+      page = 1, 
+      pageSize = 100 
+    } = params;
+    
     const url = new URL(`${BASE_URL}/collection`);
     
     // Add query parameters
@@ -34,9 +48,23 @@ export const fetchArtworksList = async (
     url.searchParams.append('toppieces', 'true'); // Get top pieces for better results
     url.searchParams.append('imgonly', 'true'); // Only return results with images
     
+    // Add search query if provided
     if (query) {
       url.searchParams.append('q', query);
     }
+    
+    // Add artist filter if provided (involvedMaker parameter for Rijks API)
+    if (artist) {
+      url.searchParams.append('involvedMaker', artist);
+    }
+    
+    // Add material/technique filter if provided
+    if (medium) {
+      url.searchParams.append('material', medium);
+    }
+    
+    // Date filtering doesn't seem to be directly supported by the API
+    // We'll apply client-side filtering for dates later if needed
     
     const response = await fetch(url.toString());
     
