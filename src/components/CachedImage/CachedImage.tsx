@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { LazyLoadImage } from 'react-lazy-load-image-component';
 import { Box, CircularProgress, useTheme } from '@mui/material';
 import 'react-lazy-load-image-component/src/effects/blur.css';
@@ -32,8 +32,10 @@ const CachedImage: React.FC<CachedImageProps> = ({
   sx = {},
 }) => {
   const theme = useTheme();
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const [currentSrc, setCurrentSrc] = useState(src);
   
   // Check if src is empty or invalid immediately
   const noSource = !src || src === '';
@@ -42,6 +44,8 @@ const CachedImage: React.FC<CachedImageProps> = ({
   useEffect(() => {
     if (src && !noSource) {
       cacheImage(src);
+      setCurrentSrc(src);
+      setRetryCount(0);
     }
   }, [src, noSource]);
 
@@ -50,6 +54,20 @@ const CachedImage: React.FC<CachedImageProps> = ({
   };
 
   const handleError = () => {
+    // For Harvard Museum images, try to construct a fallback IIIF URL if possible
+    if (retryCount === 0 && currentSrc.includes('harvardartmuseums') && !currentSrc.includes('iiif')) {
+      // Extract ID from the URL to try and build an IIIF URL
+      const matches = currentSrc.match(/ids\/([^/]+)/);
+      if (matches && matches[1]) {
+        const harvestId = matches[1];
+        const iiifUrl = `https://ids.lib.harvard.edu/ids/iiif/${harvestId}/full/!800,800/0/default.jpg`;
+        setCurrentSrc(iiifUrl);
+        setRetryCount(1);
+        return;
+      }
+    }
+    
+    // Default error handling if we can't retry or already tried
     setLoading(false);
     setError(true);
   };
@@ -86,7 +104,7 @@ const CachedImage: React.FC<CachedImageProps> = ({
       
       {!noSource && (
         <LazyLoadImage
-          src={src}
+          src={currentSrc}
           alt={alt}
           effect={effect}
           height={height}

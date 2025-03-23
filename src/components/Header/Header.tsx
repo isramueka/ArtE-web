@@ -12,10 +12,7 @@ import {
   ListItem, 
   ListItemText,
   ListItemButton,
-  Container,
-  useMediaQuery,
-  useTheme,
-  Link
+  Container
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import CollectionsIcon from '@mui/icons-material/Collections';
@@ -28,8 +25,6 @@ const navItems = [
 
 const Header: React.FC = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const location = useLocation();
 
   const handleDrawerToggle = () => {

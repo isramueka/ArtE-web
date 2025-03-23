@@ -5,12 +5,10 @@ import {
   Typography, 
   Grid, 
   Card, 
-  CardMedia, 
   CardContent, 
   Box, 
   Breadcrumbs,
   Link,
-  Chip,
   Button,
   Dialog,
   DialogTitle,
@@ -20,9 +18,6 @@ import {
   IconButton,
   CardActions,
   Divider,
-  List,
-  ListItem,
-  ListItemText,
   Paper,
   Alert,
   Tooltip,
@@ -315,9 +310,11 @@ const ExhibitionsPage: React.FC = () => {
     
     console.log("Found exhibition from selector:", exhibition);
 
-    // Call all hooks unconditionally at the top of the component
-    // Define empty artworkIds array as a fallback
-    const artworkIds = exhibition?.artworkIds || [];
+    // Wrap artworkIds in its own useMemo
+    const artworkIds = React.useMemo(() => {
+      return exhibition?.artworkIds || [];
+    }, [exhibition]);
+    
     console.log("Artwork IDs:", artworkIds);
     
     // Get artworks for the exhibition - use useMemo to prevent unnecessary recalculations

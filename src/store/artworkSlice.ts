@@ -38,7 +38,6 @@ interface ArtworkState {
     artist: string;
     dateFrom: string;
     dateTo: string;
-    medium: string;
     source: 'all' | 'rijksmuseum' | 'harvardartmuseums';
   };
   // Track which queries/pages we've already fetched
@@ -66,7 +65,6 @@ const initialState: ArtworkState = {
     artist: '',
     dateFrom: '',
     dateTo: '',
-    medium: '',
     source: 'all',
   },
   fetchedData: {},
@@ -78,9 +76,8 @@ const getCacheKey = (
   artist: string = '',
   dateFrom: string = '',
   dateTo: string = '',
-  medium: string = '',
   source: string
-) => `${query}:${artist}:${dateFrom}:${dateTo}:${medium}:${source}`;
+) => `${query}:${artist}:${dateFrom}:${dateTo}:${source}`;
 
 // Helper to convert display page to fetch page
 // For example, display pages 1-5 (showing 20 items each) would be fetch page 1 (fetching 100 items)
@@ -97,7 +94,6 @@ export const fetchArtworks = createAsyncThunk(
       artist = '',
       dateFrom = '',
       dateTo = '',
-      medium = '',
       page = 1, // This is the display page
       source = 'all',
       forceRefresh = false,
@@ -106,7 +102,6 @@ export const fetchArtworks = createAsyncThunk(
       artist?: string;
       dateFrom?: string;
       dateTo?: string;
-      medium?: string;
       page?: number;
       source?: 'all' | 'rijksmuseum' | 'harvardartmuseums';
       forceRefresh?: boolean;
@@ -115,25 +110,27 @@ export const fetchArtworks = createAsyncThunk(
   ) => {
     try {
       const state = getState() as RootState;
-      const cacheKey = getCacheKey(query, artist, dateFrom, dateTo, medium, source);
+      const cacheKey = getCacheKey(query, artist, dateFrom, dateTo, source);
       const fetchedData = state.artworks.fetchedData;
       
-      // Calculate which fetch page we need
+      // Calculate the fetch page from display page
       const fetchPage = displayPageToFetchPage(page);
       
-      // Check if we already have this data in the cache
-      if (
-        !forceRefresh &&
-        fetchedData[cacheKey] && 
-        fetchedData[cacheKey].fetched && 
-        fetchedData[cacheKey].fetchedPages.includes(fetchPage)
-      ) {
-        // We already have this data, just update the current page
+      // Check if we need to fetch or can use existing data
+      const needToFetch = forceRefresh || 
+        !fetchedData[cacheKey] || 
+        !fetchedData[cacheKey].fetched ||
+        !fetchedData[cacheKey].fetchedPages.includes(fetchPage);
+      
+      if (!needToFetch) {
+        console.log(`Using cached data for query: ${query}, page: ${page}, source: ${source}`);
+        
+        // Return object that indicates we're using cached data
         return {
-          artworks: [], // No new artworks to add
           newFetch: false,
+          artworks: [], // No new artworks to add
           pagination: {
-            currentPage: page, // Update to the requested display page
+            currentPage: page,
             pageSize: DISPLAY_PAGE_SIZE,
             totalItems: state.artworks.pagination.totalItems,
             totalPages: state.artworks.pagination.totalPages,
@@ -143,16 +140,17 @@ export const fetchArtworks = createAsyncThunk(
             artist,
             dateFrom,
             dateTo,
-            medium,
             source,
           },
         };
       }
       
-      // We need to fetch data
+      console.log(`Fetching new data for query: ${query}, page: ${page}, source: ${source}`);
+      
+      // Initialize variables for tracking items
       let artworks: Artwork[] = [];
-      let rijksTotal = state.artworks.pagination.totalItems.rijksmuseum;
-      let harvardTotal = state.artworks.pagination.totalItems.harvardartmuseums;
+      let rijksTotal = 0;
+      let harvardTotal = 0;
       
       // Fetch from Rijksmuseum if source is 'all' or 'rijksmuseum'
       if (source === 'all' || source === 'rijksmuseum') {
@@ -161,7 +159,6 @@ export const fetchArtworks = createAsyncThunk(
           artist,
           dateFrom,
           dateTo,
-          medium,
           page: fetchPage,
           pageSize: FETCH_BATCH_SIZE
         });
@@ -179,7 +176,6 @@ export const fetchArtworks = createAsyncThunk(
           artist,
           dateFrom,
           dateTo,
-          medium,
           page: fetchPage,
           pageSize: FETCH_BATCH_SIZE
         });
@@ -211,11 +207,8 @@ export const fetchArtworks = createAsyncThunk(
           artist,
           dateFrom,
           dateTo,
-          medium,
           source,
         },
-        cacheKey,
-        fetchPage, // Store the fetch page, not the display page
       };
     } catch (error) {
       // Handle error appropriately
@@ -275,33 +268,28 @@ const artworkSlice = createSlice({
   initialState,
   reducers: {
     // Additional reducers for other actions (like setting filters, clearing, etc.)
-    setFilter: (state, action: PayloadAction<{ 
-      query?: string; 
-      artist?: string;
-      dateFrom?: string;
-      dateTo?: string;
-      medium?: string;
-      source?: 'all' | 'rijksmuseum' | 'harvardartmuseums' 
-    }>) => {
+    setFilter: (state, action: PayloadAction<Partial<ArtworkState['filters']>>) => {
       if (action.payload.query !== undefined) {
         state.filters.query = action.payload.query;
       }
+      
       if (action.payload.artist !== undefined) {
         state.filters.artist = action.payload.artist;
       }
+      
       if (action.payload.dateFrom !== undefined) {
         state.filters.dateFrom = action.payload.dateFrom;
       }
+      
       if (action.payload.dateTo !== undefined) {
         state.filters.dateTo = action.payload.dateTo;
       }
-      if (action.payload.medium !== undefined) {
-        state.filters.medium = action.payload.medium;
-      }
+      
       if (action.payload.source !== undefined) {
         state.filters.source = action.payload.source;
       }
-      // Reset to page 1 when filters change
+      
+      // Reset pagination to page 1 when filters change
       state.pagination.currentPage = 1;
     },
     
@@ -322,56 +310,75 @@ const artworkSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      // Handle pending state
       .addCase(fetchArtworks.pending, (state) => {
         state.status = 'loading';
-        // Don't clear the error here to allow showing previous errors during loading
       })
-      // Handle successful fetch
       .addCase(fetchArtworks.fulfilled, (state, action) => {
         state.status = 'succeeded';
         state.error = null;
+
+        // Extract data from action payload
+        const { artworks, newFetch, pagination, filters } = action.payload;
         
-        if (action.payload.newFetch && action.payload.artworks.length > 0) {
-          // Merge new artworks with existing ones if this is a new fetch
-          // Filter out duplicates by ID to avoid duplicates
-          const existingIds = new Set(state.items.map(item => item.id));
-          const newUniqueArtworks = action.payload.artworks.filter(artwork => !existingIds.has(artwork.id));
-          
-          state.items = [...state.items, ...newUniqueArtworks];
-          
-          // Update the cache to mark this query/page as fetched
-          if (action.payload.cacheKey) {
-            if (!state.fetchedData[action.payload.cacheKey]) {
-              state.fetchedData[action.payload.cacheKey] = {
-                fetched: true,
-                fetchedPages: [action.payload.fetchPage],
-              };
-            } else {
-              state.fetchedData[action.payload.cacheKey].fetched = true;
-              if (!state.fetchedData[action.payload.cacheKey].fetchedPages.includes(action.payload.fetchPage)) {
-                state.fetchedData[action.payload.cacheKey].fetchedPages.push(action.payload.fetchPage);
-              }
-            }
-          }
-        }
-        
-        // Update pagination
-        state.pagination.currentPage = action.payload.pagination.currentPage;
-        state.pagination.pageSize = action.payload.pagination.pageSize;
-        
-        if (action.payload.pagination.totalItems) {
-          state.pagination.totalItems = action.payload.pagination.totalItems;
-          state.pagination.totalPages = action.payload.pagination.totalPages;
+        // Update pagination information
+        if (pagination) {
+          state.pagination = {
+            ...state.pagination,
+            ...pagination,
+          };
         }
         
         // Update filters
-        state.filters = action.payload.filters;
+        if (filters) {
+          state.filters = {
+            ...state.filters,
+            ...filters,
+          };
+        }
+        
+        // If this is new data (not from cache), add the artworks to our collection
+        if (newFetch && artworks.length > 0) {
+          // Create a map from existing items for faster lookup
+          const existingItemsMap = new Map(
+            state.items.map(item => [item.id, item])
+          );
+          
+          // Add new artworks, avoiding duplicates
+          artworks.forEach((artwork) => {
+            if (!existingItemsMap.has(artwork.id)) {
+              state.items.push(artwork);
+            }
+          });
+        }
+        
+        // Update the fetchedData cache to record what we've fetched
+        const cacheKey = getCacheKey(
+          filters.query, 
+          filters.artist,
+          filters.dateFrom,
+          filters.dateTo,
+          filters.source
+        );
+        
+        const fetchPage = displayPageToFetchPage(pagination.currentPage);
+        
+        // Initialize the cache entry if it doesn't exist
+        if (!state.fetchedData[cacheKey]) {
+          state.fetchedData[cacheKey] = {
+            fetched: true,
+            fetchedPages: [fetchPage],
+          };
+        } else {
+          // Update the existing cache entry
+          state.fetchedData[cacheKey].fetched = true;
+          if (!state.fetchedData[cacheKey].fetchedPages.includes(fetchPage)) {
+            state.fetchedData[cacheKey].fetchedPages.push(fetchPage);
+          }
+        }
       })
-      // Handle failed fetch
       .addCase(fetchArtworks.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.payload as string || 'Failed to fetch artworks';
+        state.error = action.error.message || 'Failed to fetch artworks';
       })
       // Handle artwork detail fetching
       .addCase(fetchArtworkDetail.fulfilled, (state, action) => {
@@ -403,30 +410,84 @@ export const { setFilter, resetFilters, setPage, clearArtworks } = artworkSlice.
 // Export selectors
 export const selectAllArtworks = (state: RootState) => state.artworks.items;
 
-// Select artworks with pagination and filtering for display
+// New selector to get paginated artworks (used in route guards)
 export const selectPaginatedArtworks = createSelector(
-  [(state: RootState) => state.artworks.items, 
-   (state: RootState) => state.artworks.filters.source,
-   (state: RootState) => state.artworks.filters.query,
-   (state: RootState) => state.artworks.filters.artist,
-   (state: RootState) => state.artworks.filters.dateFrom,
-   (state: RootState) => state.artworks.filters.dateTo,
-   (state: RootState) => state.artworks.filters.medium,
-   (state: RootState) => state.artworks.pagination.currentPage,
-   (state: RootState) => state.artworks.pagination.pageSize],
-  (items, source, query, artist, dateFrom, dateTo, medium, currentPage, pageSize) => {
-    // Filter by source and query
+  [
+    selectAllArtworks,
+    (state: RootState) => state.artworks.filters,
+    (state: RootState) => state.artworks.pagination.currentPage,
+    (state: RootState) => state.artworks.pagination.pageSize,
+  ],
+  (items, filters, currentPage, pageSize) => {
+    // First filter by source
+    let filteredItems = items;
+    
+    if (filters.source !== 'all') {
+      filteredItems = filteredItems.filter(item => item.source === filters.source);
+    }
+    
+    // Filter by keyword query
+    if (filters.query) {
+      const lowerQuery = filters.query.toLowerCase();
+      filteredItems = filteredItems.filter(item => 
+        (item.title?.toLowerCase() || '').includes(lowerQuery) || 
+        (item.artist?.toLowerCase() || '').includes(lowerQuery) ||
+        (item.description?.toLowerCase() || '').includes(lowerQuery)
+      );
+    }
+    
+    // Filter by artist
+    if (filters.artist) {
+      const lowerArtist = filters.artist.toLowerCase();
+      filteredItems = filteredItems.filter(item => 
+        (item.artist?.toLowerCase() || '').includes(lowerArtist)
+      );
+    }
+    
+    // Filter by date range
+    if (filters.dateFrom || filters.dateTo) {
+      const fromYear = filters.dateFrom ? parseInt(filters.dateFrom, 10) : -Infinity;
+      const toYear = filters.dateTo ? parseInt(filters.dateTo, 10) : Infinity;
+      
+      filteredItems = filteredItems.filter(item => 
+        item.year && item.year >= fromYear && item.year <= toYear
+      );
+    }
+    
+    // Apply pagination
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    return filteredItems.slice(startIndex, endIndex);
+  }
+);
+
+// Select artworks with pagination and filtering for display
+export const selectFilteredItems = createSelector(
+  [
+    selectAllArtworks,
+    (state: RootState) => state.artworks.filters.source,
+    (state: RootState) => state.artworks.filters.query,
+    (state: RootState) => state.artworks.filters.artist,
+    (state: RootState) => state.artworks.filters.dateFrom,
+    (state: RootState) => state.artworks.filters.dateTo,
+    (state: RootState) => state.artworks.pagination.currentPage,
+    (state: RootState) => state.artworks.pagination.pageSize,
+  ],
+  (items, source, query, artist, dateFrom, dateTo, currentPage, pageSize) => {
+    // First filter by source
     let filteredItems = items;
     
     if (source !== 'all') {
       filteredItems = filteredItems.filter(item => item.source === source);
     }
     
+    // Filter by keyword query
     if (query) {
       const lowerQuery = query.toLowerCase();
       filteredItems = filteredItems.filter(item => 
         (item.title?.toLowerCase() || '').includes(lowerQuery) || 
-        (item.artist?.toLowerCase() || '').includes(lowerQuery)
+        (item.artist?.toLowerCase() || '').includes(lowerQuery) ||
+        (item.description?.toLowerCase() || '').includes(lowerQuery)
       );
     }
     
@@ -438,55 +499,49 @@ export const selectPaginatedArtworks = createSelector(
       );
     }
     
-    // Filter by medium
-    if (medium) {
-      const lowerMedium = medium.toLowerCase();
+    // Filter by date range
+    if (dateFrom || dateTo) {
+      const fromYear = dateFrom ? parseInt(dateFrom, 10) : -Infinity;
+      const toYear = dateTo ? parseInt(dateTo, 10) : Infinity;
+      
       filteredItems = filteredItems.filter(item => 
-        (item.medium?.toLowerCase() || '').includes(lowerMedium)
+        item.year && item.year >= fromYear && item.year <= toYear
       );
     }
     
-    // Filter by date range
-    if (dateFrom || dateTo) {
-      filteredItems = filteredItems.filter(item => {
-        // Skip items without year data
-        if (!item.year) return false;
-        
-        // Check if year is within range
-        const year = item.year;
-        const fromYear = dateFrom ? parseInt(dateFrom, 10) : -Infinity;
-        const toYear = dateTo ? parseInt(dateTo, 10) : Infinity;
-        
-        return year >= fromYear && year <= toYear;
-      });
-    }
+    // Calculate total pages
+    const totalPages = Math.ceil(filteredItems.length / pageSize);
     
-    // Calculate pagination
+    // Get the items for the current page
     const startIndex = (currentPage - 1) * pageSize;
-    const endIndex = startIndex + pageSize;
-    const paginatedItems = filteredItems.slice(startIndex, endIndex);
+    const paginatedItems = filteredItems.slice(startIndex, startIndex + pageSize);
     
-    return paginatedItems;
+    return {
+      items: paginatedItems,
+      totalItems: filteredItems.length,
+      totalPages
+    };
   }
 );
 
 // Selector to check if we need to fetch more data for the current page
 export const selectShouldFetchForCurrentPage = createSelector(
-  [(state: RootState) => state.artworks.pagination.currentPage,
-   (state: RootState) => state.artworks.filters.source,
-   (state: RootState) => state.artworks.filters.query,
-   (state: RootState) => state.artworks.filters.artist,
-   (state: RootState) => state.artworks.filters.dateFrom,
-   (state: RootState) => state.artworks.filters.dateTo,
-   (state: RootState) => state.artworks.filters.medium,
-   (state: RootState) => state.artworks.fetchedData],
-  (currentPage, source, query, artist, dateFrom, dateTo, medium, fetchedData) => {
-    const cacheKey = getCacheKey(query, artist, dateFrom, dateTo, medium, source);
+  [
+    (state: RootState) => state.artworks.pagination.currentPage,
+    (state: RootState) => state.artworks.filters.source,
+    (state: RootState) => state.artworks.filters.query,
+    (state: RootState) => state.artworks.filters.artist,
+    (state: RootState) => state.artworks.filters.dateFrom,
+    (state: RootState) => state.artworks.filters.dateTo,
+    (state: RootState) => state.artworks.fetchedData,
+  ],
+  (currentPage, source, query, artist, dateFrom, dateTo, fetchedData) => {
+    const cacheKey = getCacheKey(query, artist, dateFrom, dateTo, source);
     const fetchPage = displayPageToFetchPage(currentPage);
     
-    // Check if we've already fetched data for this page
+    // If we don't have data for this key or fetch page, we need to fetch
     return !fetchedData[cacheKey] || 
-           !fetchedData[cacheKey].fetched || 
+           !fetchedData[cacheKey].fetched ||
            !fetchedData[cacheKey].fetchedPages.includes(fetchPage);
   }
 );

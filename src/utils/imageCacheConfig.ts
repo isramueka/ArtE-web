@@ -75,9 +75,12 @@ export const clearImageCache = () => {
   localStorage.removeItem('art_image_cache');
 };
 
-// Export a default object with all functions
-export default {
+// Define the export object as a variable first
+const imageCache = {
   setupImageCache,
   cacheImage,
   clearImageCache
-}; 
+};
+
+// Export the default object
+export default imageCache; 

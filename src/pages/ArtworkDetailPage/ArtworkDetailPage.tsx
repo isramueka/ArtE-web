@@ -29,7 +29,7 @@ import {
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AddIcon from '@mui/icons-material/Add';
 import BookmarkAddIcon from '@mui/icons-material/BookmarkAdd';
-import { RootState, store } from '../../store';
+import { store } from '../../store';
 import { 
   selectArtworkById,
   selectHasArtworkDetail,
@@ -42,7 +42,6 @@ import {
   addArtworkToExhibition,
   createExhibition
 } from '../../store/exhibitionsSlice';
-import { Artwork, ArtworkDetail } from '../../types/Artwork';
 import CachedImage from '../../components/CachedImage';
 
 const ArtworkDetailPage: React.FC = () => {

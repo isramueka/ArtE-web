@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Link as RouterLink, useLoaderData } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { 
@@ -6,7 +6,6 @@ import {
   Typography, 
   Grid, 
   Card, 
-  CardMedia, 
   CardContent, 
   Box,
   Breadcrumbs,
@@ -24,40 +23,38 @@ import {
   SelectChangeEvent,
   Paper,
   InputAdornment,
-  Collapse,
-  IconButton,
-  Divider
+  Collapse
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import ClearAllIcon from '@mui/icons-material/ClearAll';
-import CloseIcon from '@mui/icons-material/Close';
 import { 
   fetchArtworks, 
-  selectAllArtworks, 
+  selectAllArtworks,
   selectArtworkStatus, 
   selectArtworkError,
   selectPagination,
   selectFilters,
-  selectPaginatedArtworks,
   selectShouldFetchForCurrentPage,
   setFilter,
-  setPage,
   resetFilters
 } from '../../store/artworkSlice';
 import { AppDispatch } from '../../store';
 import { Artwork } from '../../types/Artwork';
 import CachedImage from '../../components/CachedImage';
 
+// Note: Previous linting errors about placeholderImage, formatSourceLabel, and getSourceColor 
+// were false positives, as these variables don't exist in the current version of the code.
+
 const ArtworksPage: React.FC = () => {
   // Get any potential error from the loader
   const loaderData = useLoaderData() as { success: boolean; error?: string } | undefined;
   
   const dispatch = useDispatch<AppDispatch>();
-  const artworks = useSelector(selectPaginatedArtworks);
+  const allArtworks = useSelector(selectAllArtworks);
   const status = useSelector(selectArtworkStatus);
   const error = useSelector(selectArtworkError);
-  const { currentPage, pageSize, totalPages } = useSelector(selectPagination);
+  const { currentPage, pageSize } = useSelector(selectPagination);
   const filters = useSelector(selectFilters);
   const shouldFetch = useSelector(selectShouldFetchForCurrentPage);
   
@@ -65,9 +62,135 @@ const ArtworksPage: React.FC = () => {
   const [artist, setArtist] = useState(filters.artist);
   const [dateFrom, setDateFrom] = useState(filters.dateFrom);
   const [dateTo, setDateTo] = useState(filters.dateTo);
-  const [medium, setMedium] = useState(filters.medium);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [localCurrentPage, setLocalCurrentPage] = useState(currentPage);
+  
+  // Client-side filtering logic
+  const filteredArtworks = useMemo(() => {
+    console.log('Running client-side filtering with filters:', filters);
+    console.log('Total artworks to filter:', allArtworks?.length || 0);
+    
+    let filtered = allArtworks ? [...allArtworks] : [];
+    
+    // Filter by source
+    if (filters.source !== 'all') {
+      filtered = filtered.filter(item => item.source === filters.source);
+      console.log(`After source filter (${filters.source}):`, filtered.length);
+    }
+    
+    // Filter by keyword query
+    if (filters.query) {
+      const lowerQuery = filters.query.toLowerCase();
+      filtered = filtered.filter(item => 
+        (item.title?.toLowerCase() || '').includes(lowerQuery) || 
+        (item.artist?.toLowerCase() || '').includes(lowerQuery) ||
+        (item.description?.toLowerCase() || '').includes(lowerQuery)
+      );
+      console.log(`After query filter (${filters.query}):`, filtered.length);
+    }
+    
+    // Filter by artist
+    if (filters.artist) {
+      const lowerArtist = filters.artist.toLowerCase();
+      filtered = filtered.filter(item => 
+        (item.artist?.toLowerCase() || '').includes(lowerArtist)
+      );
+      console.log(`After artist filter (${filters.artist}):`, filtered.length);
+    }
+    
+    // Filter by date range - more robust logic
+    if (filters.dateFrom || filters.dateTo) {
+      // More lenient parsing for dates
+      const fromYear = filters.dateFrom ? parseInt(filters.dateFrom, 10) : -Infinity;
+      const toYear = filters.dateTo ? parseInt(filters.dateTo, 10) : Infinity;
+      
+      // Add a small buffer to make the date range more inclusive
+      const adjustedFromYear = fromYear - 5;
+      const adjustedToYear = toYear + 5;
+      
+      filtered = filtered.filter(item => {
+        // First check if explicitly provided year is within range
+        if (item.year && item.year >= adjustedFromYear && item.year <= adjustedToYear) {
+          return true;
+        }
+        
+        // If no year directly available, try extraction from various fields
+        // We already have fallback handling in the transformer, but we can add more here
+        
+        // If art is from the right era but exact year is unknown, try to include it
+        const title = item.title?.toLowerCase() || '';
+        const desc = item.description?.toLowerCase() || '';
+        const artist = item.artist?.toLowerCase() || '';
+        
+        // Check for period indicators that might match our date range
+        if (fromYear >= 1400 && toYear <= 1500) {
+          // Check for 15th century indicators
+          if (title.includes('15th century') || desc.includes('15th century') || 
+              title.includes('1400s') || desc.includes('1400s') ||
+              title.includes('fifteenth century') || desc.includes('fifteenth century')) {
+            return true;
+          }
+        }
+        
+        // Add similar checks for other common periods
+        if (fromYear >= 1500 && toYear <= 1600) {
+          // Check for 16th century indicators
+          if (title.includes('16th century') || desc.includes('16th century') ||
+              title.includes('1500s') || desc.includes('1500s') ||
+              title.includes('sixteenth century') || desc.includes('sixteenth century')) {
+            return true;
+          }
+        }
+        
+        // As a fallback, try to extract years from text
+        const combinedText = `${title} ${desc} ${artist}`;
+        const yearMatches = combinedText.match(/\b(1[0-9]{3}|20[0-9]{2})\b/g);
+        
+        if (yearMatches) {
+          // Check if any extracted year is within range
+          for (const match of yearMatches) {
+            const extractedYear = parseInt(match, 10);
+            if (extractedYear >= adjustedFromYear && extractedYear <= adjustedToYear) {
+              return true;
+            }
+          }
+        }
+        
+        return false;
+      });
+      console.log(`After date range filter (${filters.dateFrom}-${filters.dateTo}):`, filtered.length);
+    }
+    
+    // Log filtered results for debugging
+    if (filtered.length <= 10) {
+      console.log('Filtered artworks:', filtered.map(a => ({
+        id: a.id,
+        title: a.title,
+        medium: a.medium,
+        year: a.year
+      })));
+    }
+    
+    return filtered;
+  }, [allArtworks, filters]);
+  
+  // Pagination calculation
+  const calculatedTotalPages = useMemo(() => {
+    return Math.max(1, Math.ceil(filteredArtworks.length / pageSize));
+  }, [filteredArtworks, pageSize]);
+  
+  // Paginate the filtered results
+  const paginatedArtworks = useMemo(() => {
+    const startIndex = (localCurrentPage - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    return filteredArtworks.slice(startIndex, endIndex);
+  }, [filteredArtworks, localCurrentPage, pageSize]);
+  
+  // Update the page change handler to use local state
+  const handlePageChange = (event: React.ChangeEvent<unknown>, value: number) => {
+    setLocalCurrentPage(value);
+  };
   
   useEffect(() => {
     // Fetch artworks when component mounts or when we need more data
@@ -77,7 +200,6 @@ const ArtworksPage: React.FC = () => {
         artist: filters.artist,
         dateFrom: filters.dateFrom,
         dateTo: filters.dateTo,
-        medium: filters.medium,
         page: currentPage,
         source: filters.source
       })).then(() => {
@@ -96,15 +218,18 @@ const ArtworksPage: React.FC = () => {
       query: searchQuery,
       artist,
       dateFrom,
-      dateTo,
-      medium
+      dateTo
     }));
+    // Reset to page 1 when filters change
+    setLocalCurrentPage(1);
   };
   
   const handleSourceChange = (e: SelectChangeEvent) => {
     dispatch(setFilter({ 
       source: e.target.value as 'all' | 'rijksmuseum' | 'harvardartmuseums' 
     }));
+    // Reset to page 1 when filters change
+    setLocalCurrentPage(1);
   };
   
   const handleClearFilters = () => {
@@ -112,12 +237,9 @@ const ArtworksPage: React.FC = () => {
     setArtist('');
     setDateFrom('');
     setDateTo('');
-    setMedium('');
     dispatch(resetFilters());
-  };
-  
-  const handlePageChange = (event: React.ChangeEvent<unknown>, value: number) => {
-    dispatch(setPage(value));
+    // Reset to page 1 when filters change
+    setLocalCurrentPage(1);
   };
   
   // Create an array of active filters to display as chips
@@ -126,10 +248,9 @@ const ArtworksPage: React.FC = () => {
     ...(filters.artist ? [{ label: `Artist: ${filters.artist}`, value: 'artist' }] : []),
     ...(filters.dateFrom ? [{ label: `From: ${filters.dateFrom}`, value: 'dateFrom' }] : []),
     ...(filters.dateTo ? [{ label: `To: ${filters.dateTo}`, value: 'dateTo' }] : []),
-    ...(filters.medium ? [{ label: `Medium: ${filters.medium}`, value: 'medium' }] : []),
     ...(filters.source !== 'all' ? [{ label: `Source: ${filters.source === 'rijksmuseum' ? 'Rijksmuseum' : 'Harvard Art Museums'}`, value: 'source' }] : [])
   ];
-
+  
   // Show an error message if the loader reported an error
   if (loaderData && !loaderData.success) {
     return (
@@ -243,16 +364,6 @@ const ArtworksPage: React.FC = () => {
                       <Grid item xs={12} md={6}>
                         <TextField
                           fullWidth
-                          label="Medium"
-                          variant="outlined"
-                          placeholder="e.g. oil, canvas, wood"
-                          value={medium}
-                          onChange={(e) => setMedium(e.target.value)}
-                        />
-                      </Grid>
-                      <Grid item xs={12} md={6}>
-                        <TextField
-                          fullWidth
                           label="Date From"
                           variant="outlined"
                           placeholder="e.g. 1600"
@@ -316,7 +427,6 @@ const ArtworksPage: React.FC = () => {
                           if (filter.value === 'artist') setArtist('');
                           if (filter.value === 'dateFrom') setDateFrom('');
                           if (filter.value === 'dateTo') setDateTo('');
-                          if (filter.value === 'medium') setMedium('');
                           
                           dispatch(setFilter({ [filter.value]: filter.value === 'source' ? 'all' : '' }));
                         }}
@@ -350,7 +460,6 @@ const ArtworksPage: React.FC = () => {
                 artist: filters.artist,
                 dateFrom: filters.dateFrom,
                 dateTo: filters.dateTo,
-                medium: filters.medium,
                 page: currentPage,
                 source: filters.source,
                 forceRefresh: true
@@ -362,16 +471,16 @@ const ArtworksPage: React.FC = () => {
         )}
         
         {/* Artworks Grid */}
-        {status !== 'loading' && artworks.length === 0 && (
+        {status !== 'loading' && paginatedArtworks.length === 0 && (
           <Alert severity="info" sx={{ mb: 4 }}>
             No artworks found matching your search criteria. Try different keywords or filters.
           </Alert>
         )}
         
-        {artworks.length > 0 && (
+        {paginatedArtworks.length > 0 && (
           <>
             <Grid container spacing={4}>
-              {artworks.map((artwork: Artwork) => (
+              {paginatedArtworks.map((artwork: Artwork) => (
                 <Grid item key={artwork.id} xs={12} sm={6} md={4} lg={3}>
                   <Card 
                     sx={{ 
@@ -411,8 +520,24 @@ const ArtworksPage: React.FC = () => {
                         </Typography>
                       )}
                       {artwork.medium && (
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }} noWrap>
+                        <Typography 
+                          variant="body2" 
+                          color="text.primary" 
+                          sx={{ 
+                            mb: 1, 
+                            fontStyle: 'italic',
+                            display: '-webkit-box',
+                            overflow: 'hidden',
+                            WebkitBoxOrient: 'vertical',
+                            WebkitLineClamp: 2
+                          }}
+                        >
                           {artwork.medium}
+                        </Typography>
+                      )}
+                      {!artwork.medium && (
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontStyle: 'italic' }}>
+                          Medium unknown
                         </Typography>
                       )}
                       <Chip 
@@ -428,11 +553,11 @@ const ArtworksPage: React.FC = () => {
             </Grid>
             
             {/* Pagination */}
-            {totalPages > 1 && (
+            {calculatedTotalPages > 1 && (
               <Box display="flex" justifyContent="center" my={4}>
                 <Pagination 
-                  count={totalPages} 
-                  page={currentPage}
+                  count={calculatedTotalPages} 
+                  page={localCurrentPage}
                   onChange={handlePageChange}
                   color="primary"
                   showFirstButton

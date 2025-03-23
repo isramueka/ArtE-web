@@ -9,8 +9,7 @@ import { transformHarvardArtworks, transformHarvardArtworkDetail } from './trans
 // Base URL for the Harvard Art Museums API
 const BASE_URL = 'https://api.harvardartmuseums.org';
 // Hardcode the API key directly for now to ensure it works
-const API_KEY = 'ca46d3f1-9f99-499c-b12d-e5f57052da61';  // process.env.REACT_APP_HARVARD_API_KEY
-
+const API_KEY = process.env.REACT_APP_HARVARD_API_KEY;
 /**
  * Fetches a list of artworks from the Harvard Art Museums API
  * @param params Search parameters object
@@ -22,7 +21,6 @@ export const fetchArtworksList = async (
     artist?: string;
     dateFrom?: string;
     dateTo?: string;
-    medium?: string;
     page?: number;
     pageSize?: number;
   }
@@ -33,7 +31,6 @@ export const fetchArtworksList = async (
       artist = '',
       dateFrom = '',
       dateTo = '',
-      medium = '',
       page = 1, 
       pageSize = 100 
     } = params;
@@ -44,7 +41,12 @@ export const fetchArtworksList = async (
     url.searchParams.append('apikey', API_KEY || '');
     url.searchParams.append('page', page.toString());
     url.searchParams.append('size', pageSize.toString());
-    url.searchParams.append('hasimage', '1'); // Only return results with images
+    // Only return objects that potentially have an image available
+    // Use 'any' instead of '1' to include images that might be accessible via the IIIF service
+    url.searchParams.append('hasimage', 'any');
+    
+    // Request additional fields we need for image handling
+    url.searchParams.append('fields', 'id,title,people,description,dated,primaryimageurl,images,url,medium,dimensions,creditline,labeltext');
     
     // Build advanced query using field-specific search
     let advancedQuery = '';
@@ -58,12 +60,6 @@ export const fetchArtworksList = async (
     if (artist) {
       if (advancedQuery) advancedQuery += ' AND ';
       advancedQuery += `person:"${artist}"`;
-    }
-    
-    // Add medium filter
-    if (medium) {
-      if (advancedQuery) advancedQuery += ' AND ';
-      advancedQuery += `medium:"${medium}"`;
     }
     
     // Add date range filtering if both dates are provided
@@ -108,6 +104,9 @@ export const fetchArtworkDetail = async (id: string): Promise<ArtworkDetail | nu
     
     // Add API key
     url.searchParams.append('apikey', API_KEY || '');
+    
+    // Request specific fields including all image-related data
+    url.searchParams.append('fields', 'id,title,people,description,dated,primaryimageurl,images,url,medium,dimensions,creditline,labeltext,technique,classification,division,provenance,accessionumber,accessionyear,colors,exhibitions,publications');
     
     const response = await fetch(url.toString());
     
