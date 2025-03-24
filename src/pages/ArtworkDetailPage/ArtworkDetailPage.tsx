@@ -43,6 +43,8 @@ import {
   createExhibition
 } from '../../store/exhibitionsSlice';
 import CachedImage from '../../components/CachedImage';
+import SocialShare from '../../components/SocialShare';
+import { getArtworkShareUrl } from '../../utils/socialShareUtils';
 
 const ArtworkDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -258,13 +260,20 @@ const ArtworkDetailPage: React.FC = () => {
             Back to Artworks
           </Button>
           
-          <Button
-            variant="outlined"
-            startIcon={<BookmarkAddIcon />}
-            onClick={handleExhibitionMenuOpen}
-          >
-            Add to Exhibition
-          </Button>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <SocialShare 
+              url={getArtworkShareUrl(id || '')}
+              title={`Check out "${artwork.title}" on Art Collections`}
+            />
+            
+            <Button
+              variant="outlined"
+              startIcon={<BookmarkAddIcon />}
+              onClick={handleExhibitionMenuOpen}
+            >
+              Add to Exhibition
+            </Button>
+          </Box>
           
           <Menu
             anchorEl={exhibitionMenuAnchor}

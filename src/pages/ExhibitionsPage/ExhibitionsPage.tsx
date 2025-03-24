@@ -44,6 +44,8 @@ import {
 import { selectArtworkById } from '../../store/artworkSlice';
 import { Artwork } from '../../types/Artwork';
 import CachedImage from '../../components/CachedImage';
+import SocialShare from '../../components/SocialShare';
+import { getExhibitionShareUrl } from '../../utils/socialShareUtils';
 
 const ExhibitionsPage: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -292,6 +294,14 @@ const ExhibitionsPage: React.FC = () => {
               <DeleteIcon />
             </IconButton>
           </Tooltip>
+          <Box sx={{ ml: 'auto' }}>
+            <SocialShare 
+              url={getExhibitionShareUrl(exhibition.id)}
+              title={`Check out my "${exhibition.title}" exhibition on Art Collections`}
+              variant="icon"
+              iconColor="primary"
+            />
+          </Box>
         </CardActions>
       </Card>
     );
@@ -377,7 +387,17 @@ const ExhibitionsPage: React.FC = () => {
         fullWidth
       >
         <DialogTitle>
-          {exhibition.title}
+          <Box sx={{ display: 'flex', alignItems: 'center', pr: 6 }}>
+            <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+              {exhibition.title}
+            </Typography>
+            <SocialShare 
+              url={getExhibitionShareUrl(exhibition.id)}
+              title={`Check out my "${exhibition.title}" exhibition on Art Collections`}
+              variant="icon"
+              iconColor="primary"
+            />
+          </Box>
           <IconButton
             aria-label="close"
             onClick={() => setViewDialogOpen(false)}

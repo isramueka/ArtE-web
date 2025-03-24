@@ -12,7 +12,7 @@ import { COMMON_MATERIALS } from './transformers';
 // Base URL for the Rijksmuseum API - already using English API endpoint
 const BASE_URL = 'https://www.rijksmuseum.nl/api/en';
 // Get API key from environment variables with fallback
-const API_KEY = process.env.REACT_APP_RIJKSMUSEUM_API_KEY?.toString() || '';
+const API_KEY = process.env.REACT_APP_RIJKSMUSEUM_API_KEY || '';
 
 /**
  * Fetches a list of artworks from the Rijksmuseum API
