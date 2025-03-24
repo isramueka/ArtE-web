@@ -157,20 +157,6 @@ const Header: React.FC = () => {
                 );
               })}
             </Box>
-
-            {/* Right-aligned action button */}
-            <Box sx={{ flexGrow: 0 }}>
-              <Button 
-                variant="contained" 
-                color="secondary" 
-                sx={{ 
-                  display: { xs: 'none', md: 'block' },
-                  px: 3,
-                }}
-              >
-                Login
-              </Button>
-            </Box>
           </Toolbar>
         </Container>
       </AppBar>
